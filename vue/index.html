@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>검은사막 가공무역 계산기</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Google Fonts: Noto Sans KR -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .dark-theme { background-color: #1a202c; color: #e2e8f0; }
+        .card { background-color: #2d3748; border: 1px solid #4a5568; }
+        .input-field { background-color: #4a5568; border: 1px solid #718096; color: #e2e8f0; }
+        .input-field::placeholder { color: #a0aec0; }
+        .btn-primary { background-color: #4299e1; transition: background-color 0.3s ease; }
+        .btn-primary:hover { background-color: #3182ce; }
+        .btn-category { background-color: #4a5568; transition: background-color 0.3s ease; }
+        .btn-category:hover, .btn-category.active { background-color: #4299e1; }
+        .result-card { background-color: rgba(74, 85, 104, 0.5); }
+        .table-header { background-color: #4a5568; }
+        .table-row-dark { background-color: #2d3748; }
+        .table-row-light { background-color: #4a5568; }
+        .toggle-bg:after { content: ''; position: absolute; top: 2px; left: 2px; background: white; width: 1.25rem; height: 1.25rem; border-radius: 50%; transition: 0.3s; }
+        input:checked + .toggle-bg:after { transform: translateX(100%); }
+        input:checked + .toggle-bg { background-color: #4299e1; }
+        .crate-card { transition: all 0.2s ease-in-out; border-width: 2px; border-color: transparent; }
+        .crate-card:hover { transform: translateY(-4px); border-color: #4299e1; }
+        .crate-card.active { border-color: #63b3ed; background-color: #4a5568; }
+    </style>
+</head>
+<body class="dark-theme">
+
+<div id="app" class="p-4 md:p-8 min-h-screen">
+    <div class="card rounded-xl shadow-lg w-full max-w-5xl mx-auto p-6 md:p-8 space-y-8">
+
+        <!-- 헤더 -->
+        <div class="text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">검은사막 가공무역 계산기</h1>
+            <p class="text-gray-400 mt-2">재료 시세를 바탕으로 무역 상자의 순이익을 계산합니다.</p>
+        </div>
+
+        <!-- 사용자 설정 -->
+        <div class="card p-4 rounded-lg">
+            <h2 class="text-xl font-semibold text-white mb-4">기본 설정</h2>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-center">
+                 <div>
+                    <label class="block text-md font-medium text-gray-300">거래소 서버</label>
+                    <select id="market-server" class="input-field w-full p-2 mt-1 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-center">
+                        <option>대한민국</option>
+                        <option>북미</option>
+                        <option>유럽</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-md font-medium text-gray-300">출발지</label>
+                    <select v-model="tradeRoute.origin" class="input-field w-full p-2 mt-1 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-center">
+                        <option v-for="node in nodes" :key="node.id" :value="node.id">{{ node.name }}</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-md font-medium text-gray-300">목적지</label>
+                    <select v-model="tradeRoute.destination" class="input-field w-full p-2 mt-1 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-center">
+                        <option v-for="node in nodes" :key="node.id" :value="node.id">{{ node.name }}</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-md font-medium text-gray-300">가공 숙련도</label>
+                    <input type="number" v-model.number="userStats.mastery" class="input-field w-full p-2 mt-1 rounded-lg text-center" placeholder="예: 1200">
+                </div>
+                <div>
+                    <label class="block text-md font-medium text-gray-300">흥정 보너스 (%)</label>
+                    <input type="number" v-model.number="userStats.bargainBonus" class="input-field w-full p-2 mt-1 rounded-lg text-center" placeholder="예: 36.5">
+                </div>
+                <div class="flex flex-col items-center justify-center">
+                     <label class="block text-md font-medium text-gray-300 mb-2">사막 버프</label>
+                    <label for="desert-buff" class="flex items-center cursor-pointer">
+                        <div class="relative">
+                            <input type="checkbox" id="desert-buff" class="sr-only" v-model="userStats.desertBuff">
+                            <div class="toggle-bg bg-gray-600 border-2 border-gray-500 h-7 w-12 rounded-full"></div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+             <div class="text-center mt-4 text-lg">
+                <span class="text-gray-300">적용 거리 보너스: </span>
+                <span class="font-bold text-blue-300">{{ distanceBonus }}%</span>
+            </div>
+        </div>
+        
+        <!-- 카테고리 선택 -->
+        <div>
+            <h2 class="text-2xl font-semibold text-white mb-4">1. 상자 종류 선택</h2>
+            <div class="flex flex-wrap gap-3">
+                <button v-for="(crates, category) in tradeCratesByCategory" :key="category"
+                        @click="selectCategory(category)"
+                        :class="['btn-category', 'text-white', 'font-bold', 'py-2', 'px-5', 'rounded-lg', { 'active': selectedCategory === category }]">
+                    {{ category }}
+                </button>
+            </div>
+        </div>
+
+        <!-- 상자 목록 (요약) -->
+        <div>
+            <h2 class="text-2xl font-semibold text-white mb-4">2. 상자 선택 및 순이익 확인</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div v-for="crate in cratesInView" :key="crate.id" 
+                     @click="selectCrate(crate)"
+                     class="crate-card card p-4 rounded-lg cursor-pointer"
+                     :class="{ 'active': activeCrate && activeCrate.id === crate.id }">
+                    <h3 class="font-bold text-lg text-white">{{ crate.name }}</h3>
+                    <p class="text-sm text-gray-400">총 재료비: {{ formatNumber(calculateTotalCost(crate.recipe)) }}</p>
+                    <p class="text-md mt-2">
+                        <span class="text-blue-300">예상 순이익: </span>
+                        <span class="font-bold text-lg" :class="calculateProfitSummary(crate) > 0 ? 'text-green-400' : 'text-red-400'">
+                            {{ formatNumber(calculateProfitSummary(crate)) }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 상세 정보 (선택 시 표시) -->
+        <div v-if="activeCrate" class="pt-6 border-t-2 border-gray-700">
+            <h2 class="text-2xl font-semibold text-white mb-4">
+                <span class="text-blue-400">{{ activeCrate.name }}</span> 상세 정보
+            </h2>
+            
+            <!-- 재료 목록 -->
+            <div class="overflow-x-auto rounded-lg border border-gray-700 mb-6">
+                <table class="w-full text-sm text-left text-gray-300">
+                    <thead class="text-xs text-gray-200 uppercase table-header">
+                        <tr>
+                            <th scope="col" class="px-4 py-3">재료명</th>
+                            <th scope="col" class="px-4 py-3 text-right">필요 개수</th>
+                            <th scope="col" class="px-4 py-3 text-right">거래소 가격</th>
+                            <th scope="col" class="px-4 py-3 text-right">총 비용</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(material, index) in activeCrate.recipe" :key="material.name"
+                            :class="index % 2 === 0 ? 'table-row-dark' : 'table-row-light'">
+                            <th scope="row" class="px-4 py-4 font-medium text-white whitespace-nowrap">{{ material.name }}</th>
+                            <td class="px-4 py-4 text-right">{{ formatNumber(material.quantity) }} 개</td>
+                            <td class="px-4 py-4 text-right">{{ formatNumber(material.price) }} 은화</td>
+                            <td class="px-4 py-4 text-right">{{ formatNumber(material.quantity * material.price) }} 은화</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 최종 계산 결과 -->
+            <div class="result-card p-6 rounded-lg space-y-3">
+                <h3 class="text-xl font-semibold text-white border-b border-gray-600 pb-2">최종 계산 결과</h3>
+                <div class="flex justify-between items-center text-lg">
+                    <span class="text-gray-300">총 재료비:</span>
+                    <span class="font-bold text-white">{{ formatNumber(detailedResults.totalCost) }} 은화</span>
+                </div>
+                <div class="flex justify-between items-center text-lg">
+                    <span class="text-gray-300">상자 원가:</span>
+                    <span class="font-bold text-white">{{ formatNumber(detailedResults.basePrice) }} 은화</span>
+                </div>
+                 <div class="flex justify-between items-center text-lg">
+                    <span class="text-gray-300">최종 판매가 (모든 보너스 적용):</span>
+                    <span class="font-bold text-green-400">{{ formatNumber(detailedResults.finalPrice) }} 은화</span>
+                </div>
+                <div class="flex justify-between items-center text-xl pt-2 border-t border-gray-600 mt-2">
+                    <span class="text-blue-300">상자당 순이익:</span>
+                    <span class="font-bold text-2xl" :class="detailedResults.netProfit > 0 ? 'text-green-400' : 'text-red-400'">
+                        {{ formatNumber(detailedResults.netProfit) }} 은화
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            // --- 데이터 ---
+            const nodes = ref([
+                { id: 'grana', name: '그라나' },
+                { id: 'calpheon', name: '칼페온' },
+                { id: 'altinova', name: '알티노바' },
+                { id: 'valencia', name: '발렌시아' },
+                { id: 'epheria', name: '에페리아' },
+            ]);
+
+            // 거리 데이터 (출발지ID -> 목적지ID -> 보너스%)
+            // 실제 데이터는 더 정확하고 많이 필요합니다.
+            const distances = {
+                grana: { valencia: 112, altinova: 67, calpheon: 30 },
+                calpheon: { valencia: 98, altinova: 50, grana: 30 },
+                altinova: { valencia: 45, grana: 67, calpheon: 50 },
+                valencia: { grana: 112, calpheon: 98, altinova: 45 },
+                epheria: { valencia: 115, altinova: 65, grana: 42 },
+            };
+
+            const tradeRoute = reactive({ origin: 'epheria', destination: 'valencia' });
+            
+            const tradeCratesByCategory = ref({
+                '목재 상자': [
+                    { id: 1, name: '칼페온 목재 상자', basePrice: 50520, recipe: [ { name: '자작나무 합판', quantity: 5, price: 20000 }, { name: '삼나무 합판', quantity: 5, price: 18000 }, { name: '소나무 합판', quantity: 5, price: 19000 }, { name: '블랙스톤 가루', quantity: 1, price: 3000 } ] },
+                    { id: 2, name: '메디아 목재 상자', basePrice: 68160, recipe: [ { name: '아카시아나무 합판', quantity: 5, price: 25000 }, { name: '편백나무 합판', quantity: 5, price: 26000 }, { name: '블랙스톤 가루', quantity: 1, price: 3000 } ] },
+                    { id: 4, name: '발렌시아 목재 상자', basePrice: 85250, recipe: [ { name: '야자수 합판', quantity: 5, price: 32000 }, { name: '딱총나무 합판', quantity: 5, price: 31000 }, { name: '블랙스톤 가루', quantity: 1, price: 3000 } ] },
+                ],
+                '광석 상자': [
+                    { id: 3, name: '강철 주괴 상자', basePrice: 45000, recipe: [ { name: '강철 주괴', quantity: 10, price: 4300 }, { name: '블랙스톤 가루', quantity: 1, price: 3000 } ] },
+                    { id: 5, name: '티타늄 주괴 상자', basePrice: 72000, recipe: [ { name: '티타늄 주괴', quantity: 10, price: 6800 }, { name: '블랙스톤 가루', quantity: 1, price: 3000 } ] },
+                    { id: 6, name: '바나듐 주괴 상자', basePrice: 69000, recipe: [ { name: '바나듐 주괴', quantity: 10, price: 6500 }, { name: '블랙스톤 가루', quantity: 1, price: 3000 } ] },
+                ],
+                '작물 상자': [
+                    { id: 7, name: '딸기 상자', basePrice: 21000, recipe: [ { name: '특상품 딸기', quantity: 10, price: 1950 }, { name: '블랙스톤 가루', quantity: 1, price: 3000 } ]},
+                    { id: 8, name: '해바라기 상자', basePrice: 23000, recipe: [ { name: '특상품 해바라기', quantity: 10, price: 2100 }, { name: '블랙스톤 가루', quantity: 1, price: 3000 } ]},
+                ]
+            });
+
+            const userStats = reactive({ mastery: 1200, bargainBonus: 35.0, desertBuff: true });
+            
+            const selectedCategory = ref('목재 상자');
+            const activeCrate = ref(null);
+
+            // --- Computed ---
+            const distanceBonus = computed(() => {
+                const { origin, destination } = tradeRoute;
+                if (origin === destination) return 0;
+                return (distances[origin] && distances[origin][destination]) || 0;
+            });
+
+            const cratesInView = computed(() => {
+                return tradeCratesByCategory.value[selectedCategory.value] || [];
+            });
+
+            const detailedResults = computed(() => {
+                if (!activeCrate.value) return {};
+                const crate = activeCrate.value;
+                const totalCost = calculateTotalCost(crate.recipe);
+                const basePrice = crate.basePrice;
+
+                let finalPrice = basePrice * (1 + distanceBonus.value / 100);
+                if (userStats.desertBuff) { finalPrice *= 1.5; }
+                finalPrice *= (1 + userStats.bargainBonus / 100);
+
+                const netProfit = finalPrice - totalCost;
+
+                return { totalCost, basePrice, finalPrice, netProfit };
+            });
+
+            // --- 메소드 ---
+            const formatNumber = (num) => {
+                if (num === null || num === undefined) return '0';
+                return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            };
+
+            const calculateTotalCost = (recipe) => {
+                return recipe.reduce((sum, material) => sum + (material.quantity * material.price), 0);
+            };
+
+            const calculateProfitSummary = (crate) => {
+                const totalCost = calculateTotalCost(crate.recipe);
+                let finalPrice = crate.basePrice * (1 + distanceBonus.value / 100);
+                if (userStats.desertBuff) { finalPrice *= 1.5; }
+                finalPrice *= (1 + userStats.bargainBonus / 100);
+                return finalPrice - totalCost;
+            };
+
+            const selectCategory = (category) => {
+                selectedCategory.value = category;
+                activeCrate.value = null; 
+            };
+
+            const selectCrate = (crate) => {
+                activeCrate.value = crate;
+            };
+
+            onMounted(() => {
+                const firstCategory = Object.keys(tradeCratesByCategory.value)[0];
+                if (firstCategory) {
+                    selectCategory(firstCategory);
+                }
+            });
+
+            return {
+                nodes,
+                tradeRoute,
+                userStats,
+                tradeCratesByCategory,
+                selectedCategory,
+                activeCrate,
+                distanceBonus,
+                cratesInView,
+                detailedResults,
+                formatNumber,
+                calculateTotalCost,
+                calculateProfitSummary,
+                selectCategory,
+                selectCrate
+            };
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>
